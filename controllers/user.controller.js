@@ -59,7 +59,25 @@ module.exports = {
     },
     getUser:async (req,res)=>{
         try {
-            
+            let userId = req.user.id;
+            let sql = 'SELECT id,name,email,phone FROM user WHERE id = ?'
+            db.passData(sql,[userId],function(obj){
+                if(obj.status == "error"){
+                    return res.status(500).json({error: obj.message || "Database error"})
+                 }else if (obj.result.length == 0){
+                    return res.status(200).json("invalid token")
+                 }
+                 else{
+                    let {id,name,email,phone} = obj.result[0];
+                    return res.status(200).json({
+                        id,
+                        name,
+                        email,
+                        phone:decrypt(phone)
+                    })
+                 }
+            })
+
         } catch (error) {
             console.log(error);
             return res.status(500).json({status:"error",message:"Internal server error"})
