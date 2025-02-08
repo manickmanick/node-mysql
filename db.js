@@ -17,7 +17,7 @@ module.exports.passData = (query,data,cb)=>{
                 if (error) {
                     return cb({ status: "error", message: error.message });
                 }
-                cb({status:"sucess",message:"",result:results})
+                cb({status:"success",message:"",result:results})
             })
         })
     } catch (error) {
