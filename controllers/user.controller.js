@@ -129,5 +129,48 @@ module.exports = {
             console.log(error);
             return res.status(500).json({status:"error",message:"Internal server error"})
         }
+    },
+    update:async(req,res)=>{
+        try {
+            const { name, phone, countryCode,id } = req.body;
+    
+            // Validate input
+            const v = new Validator({
+                name,
+                phone,
+                countryCode
+            }, {
+                name: 'required|string|minLength:3',
+                phone: 'required|string|minLength:10|maxLength:15',
+                countryCode: 'required|string|minLength:1|maxLength:5'
+            });
+    
+            const matched = await v.check();
+            if (!matched) {
+                console.log(await v.errors);
+                return res.status(400).json({ status: "error", message: v.errors });
+            }
+    
+            const encryptedPhone = encrypt(phone);
+    
+            const sql = `UPDATE user SET name = ?, phone = ?, countryCode = ? WHERE id = ?`;
+            db.passData(sql,[name,encryptedPhone,countryCode,id],function(obj){
+                if(obj.status == "error"){
+                    console.error("Database Error:", err);
+                    return res.status(500).json({ status: "error", message: "Database update failed" });
+                }
+
+                if (obj.result.affectedRows === 0) {
+                    return res.status(404).json({ status: "error", message: "User not found" });
+                }
+
+                return res.status(200).json({status:"valid",message:"Data was updated successfully"})
+
+            })
+    
+        } catch (error) {
+            console.error("Update Error:", error);
+            return res.status(500).json({ status: "error", message: "Internal server error" });
+        }
     }
 }

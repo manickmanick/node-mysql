@@ -7,5 +7,6 @@ const auth = require("../auth/auth")
 router.post("/register",userController.register);
 router.post("/login",userController.login);
 router.get("/getUser",auth.auth,userController.getUser);
+router.post("/updateUser",auth.auth,userController.update);
 
 module.exports = router;
