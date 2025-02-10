@@ -9,4 +9,6 @@ router.post("/login",userController.login);
 router.get("/getUser",auth.auth,userController.getUser);
 router.post("/updateUser",auth.auth,userController.update);
 
+router.post("/upload",auth.auth,fileUpload.upload);
+
 module.exports = router;
