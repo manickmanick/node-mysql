@@ -47,16 +47,23 @@ module.exports = {
 
               const activationToken = crypto.randomUUID();
               console.log(activationToken);
-              const activationExpires = moment().add(15, 'minutes').format('YYYY-MM-DD HH:mm:ss');
+              const activationExpires = moment().add(10, 'seconds').format('YYYY-MM-DD HH:mm:ss');
 
               const sql = `INSERT INTO user (name, email, phone, countryCode, password,status,activation_token,activation_expires) VALUES (?, ?, ?, ?, ?,'pending',?,?)`;
 
-              db.passData(sql,[name,email,encryptedPhone,countryCode,hashedPassword,activationToken,activationExpires],function(obj){
+              db.passData(sql,[name,email,encryptedPhone,countryCode,hashedPassword,activationToken,activationExpires],async function(obj){
                 if(obj.status == "error"){
                     return res.status(500).json({error: obj.message || "Database error"})
                 }else{
-                    sendActivationEmail(activationToken)
-                    return res.status(200).json({ success: 1, data: obj.result || {} });
+                    let result = await sendActivationEmail(activationToken)
+                    if(result.status == "error"){
+                        let sqlDeleteQuery = 'DELETE FROM user WHERE email = ?'
+                        db.passData(sqlDeleteQuery,[email],function(obj){
+                            if(obj.status == 'error') res.status(500).json({message:'Internal server error',status:'error'})
+                        })
+                        res.status(500).json({message:'Internal server error while sending email',status:'error'})
+                    } 
+                    return res.status(200).json({ success: 1, message:result.message });
                 }
               });
 
@@ -202,6 +209,35 @@ module.exports = {
         } catch (error) {
             console.error("accountActivation Error:", error);
             return res.status(500).json({ status: "error", message: "Internal server error" });
+        }
+    },
+    resendActivationLink:async (req,res)=>{
+        try {
+
+            const { email } = req.body;
+            const query = `SELECT * FROM user WHERE email = ? AND status = 'pending'`;
+            db.passData(query,[email],function(obj){
+                if(obj.status == "error") return res.status(500).json({ message: 'Database error',status:"error" });
+                if (obj.result.length === 0) return res.status(200).json({ message: 'User not found or already activated' });
+                else{
+                    const newToken = crypto.randomUUID();
+                    const newExpires = moment().add(15, 'minutes').format('YYYY-MM-DD HH:mm:ss');
+                    const updateQuery = `UPDATE user SET activation_token = ?, activation_expires = ? WHERE email = ?`;
+                    db.passData(updateQuery,[newToken,newExpires,email],async function(obj){
+                        if(obj.status == "error") return res.status(500).json({ message: 'Database error',status:"error" });
+                        else{
+                            let result = await sendActivationEmail(newToken);
+                            if(result.status == "error") return res.status(500).json({status:'error',message:'Error occured while sending reactivation link'})
+                             else{
+                               return res.status(200).json({status:'success',message:'Reactivation link was sent successfully'})
+                            }   
+                        }
+                    })
+                }
+            })
+        } catch (error) {
+            console.log(error);
+            return res.status(500).json({status:"error",message:"Internal server error"})
         }
     }
 }

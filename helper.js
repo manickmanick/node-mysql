@@ -44,10 +44,8 @@ const sendActivationEmail = async (token) => {
     return {message:"mail was sent successfully",status:"success"}
     } catch (error) {
         console.log(error);
-        return {message:"Internal server error",status:"failure"}
+        return {message:"Internal server error",status:"error"}
     }
-    
-
     
 };
 // Test it
