@@ -1,8 +1,10 @@
 const db = require("../db")
 const { Validator } = require('node-input-validator');
-const {encrypt,decrypt} = require("../helper")
+const {encrypt,decrypt,sendActivationEmail} = require("../helper")
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
+const crypto = require('crypto');
+const moment = require('moment');
 // user table
 
 // CREATE TABLE person (
@@ -17,10 +19,11 @@ const jwt = require('jsonwebtoken');
 // );
 
 
-
 module.exports = {
     register:async (req,res)=>{
         try {
+
+            // return res.status(200).json(sendActivationEmail())
             let {name,email,password,phone,countryCode} = req.body;
 
             const v = new Validator({name,email,password,phone,countryCode}, {
@@ -42,12 +45,17 @@ module.exports = {
 
               const hashedPassword = await bcrypt.hash(password, 10);
 
-              const sql = `INSERT INTO user (name, email, phone, countryCode, password) VALUES (?, ?, ?, ?, ?)`;
+              const activationToken = crypto.randomUUID();
+              console.log(activationToken);
+              const activationExpires = moment().add(15, 'minutes').format('YYYY-MM-DD HH:mm:ss');
 
-              db.passData(sql,[name,email,encryptedPhone,countryCode,hashedPassword],function(obj){
+              const sql = `INSERT INTO user (name, email, phone, countryCode, password,status,activation_token,activation_expires) VALUES (?, ?, ?, ?, ?,'pending',?,?)`;
+
+              db.passData(sql,[name,email,encryptedPhone,countryCode,hashedPassword,activationToken,activationExpires],function(obj){
                 if(obj.status == "error"){
                     return res.status(500).json({error: obj.message || "Database error"})
                 }else{
+                    sendActivationEmail(activationToken)
                     return res.status(200).json({ success: 1, data: obj.result || {} });
                 }
               });
@@ -97,13 +105,13 @@ module.exports = {
                 return res.status(400).json({status:"invalid",message:"invalid data given"})
               }
 
-              const sql = 'SELECT id,name,email,password FROM user WHERE email = ?'
+              const sql = 'SELECT id,name,email,password FROM user WHERE email = ? AND status = "activated"'
 
               db.passData(sql,[email],async function(obj){
                  if(obj.status == "error"){
                     return res.status(500).json({error: obj.message || "Database error"})
                  }else if(obj.status == "success" && obj.result.length == 0){
-                    return res.status(200).json({status:"valid",message:`User was not found with this email : ${email}`})
+                    return res.status(200).json({status:"valid",message:`User was not found or not activated with this email : ${email}`})
                  }else{
                     let user = obj.result[0];
                     const isMatch = await bcrypt.compare(password, user.password);
@@ -170,6 +178,29 @@ module.exports = {
     
         } catch (error) {
             console.error("Update Error:", error);
+            return res.status(500).json({ status: "error", message: "Internal server error" });
+        }
+    },
+    accountActivation:async (req,res)=>{
+        try {
+
+            const { token } = req.params;
+            const query = `SELECT * FROM user WHERE activation_token = ? AND activation_expires > NOW()`;
+            db.passData(query, [token], async (obj) => {
+                if (obj.status == "error") return res.status(500).json({ message: 'Database error', error: err });
+
+                if (obj.result.length === 0) return res.status(400).json({ message: 'Invalid or expired token' });
+
+                const updateQuery = `UPDATE user SET status = 'activated', activation_token = NULL, activation_expires = NULL WHERE activation_token = ?`;
+                db.passData(updateQuery, [token], (obj) => {
+                    if (obj.status == "error") return res.status(500).json({ message: 'Database update error', error: obj.errors });
+
+                    return res.json({ message: 'Account activated successfully!' });
+                });
+            });
+
+        } catch (error) {
+            console.error("accountActivation Error:", error);
             return res.status(500).json({ status: "error", message: "Internal server error" });
         }
     }
