@@ -24,22 +24,15 @@ const decrypt = (encryptedText) => {
     return decrypted;
 };
 
-const sendActivationEmail = async (token) => {
+const sendEmail = async (mailContent) => {
     try {
-        const activationLink = `http://localhost:${PORT}/activate/${token}`;
 
     let transporter = nodemailer.createTransport({
         service: 'Gmail',
         auth: { user: process.env.EMAIL, pass: process.env.APP_PASSWORD }
     });
 
-    await transporter.sendMail({
-        from: '"Your App" <manicm265@gmail.com>',
-        to: process.env.TO_EMAIL,
-        subject: 'Activate Your Account',
-        text: `Click the link to activate: ${activationLink}`,
-        html: `<p>Click <a href="${activationLink}">here</a> to activate your account. This link expires in 15 minutes.</p>`
-    });
+    await transporter.sendMail(mailContent);
 
     return {message:"mail was sent successfully",status:"success"}
     } catch (error) {
@@ -59,5 +52,5 @@ const sendActivationEmail = async (token) => {
 module.exports = {
     encrypt,
     decrypt,
-    sendActivationEmail
+    sendEmail
 }

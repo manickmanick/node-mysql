@@ -1,6 +1,6 @@
 const db = require("../db")
 const { Validator } = require('node-input-validator');
-const {encrypt,decrypt,sendActivationEmail} = require("../helper")
+const {encrypt,decrypt,sendEmail} = require("../helper")
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
@@ -23,7 +23,6 @@ module.exports = {
     register:async (req,res)=>{
         try {
 
-            // return res.status(200).json(sendActivationEmail())
             let {name,email,password,phone,countryCode} = req.body;
 
             const v = new Validator({name,email,password,phone,countryCode}, {
@@ -55,7 +54,15 @@ module.exports = {
                 if(obj.status == "error"){
                     return res.status(500).json({error: obj.message || "Database error"})
                 }else{
-                    let result = await sendActivationEmail(activationToken)
+                     const activationLink = `http://localhost:${PORT}/activate/${token}`;
+                    let mailContent = {
+                        from: `"Your App" ${process.env.EMAIL}`,
+                        to: process.env.TO_EMAIL,
+                        subject: 'Activate Your Account',
+                        text: `Click the link to activate: ${activationLink}`,
+                        html: `<p>Click <a href="${activationLink}">here</a> to activate your account. This link expires in 15 minutes.</p>`
+                    }
+                    let result = await sendEmail(activationToken,mailContent)
                     if(result.status == "error"){
                         let sqlDeleteQuery = 'DELETE FROM user WHERE email = ?'
                         db.passData(sqlDeleteQuery,[email],function(obj){
@@ -126,7 +133,7 @@ module.exports = {
                         return res.status(401).json({ error: 'Invalid email or password' });
                     }else{
                         // Generate JWT token
-                        const token = jwt.sign({ id: user.id, name: user.name }, process.env.JWT_SECRET, { expiresIn: '1h' });
+                        const token = jwt.sign({ id: user.id, name: user.name }, process.env.JWT_SECRET, { expiresIn: '10h' });
                         res.json({
                             message: 'Login successful',
                             token,
@@ -226,7 +233,7 @@ module.exports = {
                     db.passData(updateQuery,[newToken,newExpires,email],async function(obj){
                         if(obj.status == "error") return res.status(500).json({ message: 'Database error',status:"error" });
                         else{
-                            let result = await sendActivationEmail(newToken);
+                            let result = await sendEmail(newToken);
                             if(result.status == "error") return res.status(500).json({status:'error',message:'Error occured while sending reactivation link'})
                              else{
                                return res.status(200).json({status:'success',message:'Reactivation link was sent successfully'})
