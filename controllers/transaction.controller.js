@@ -90,27 +90,42 @@ module.exports = {
                         return res.status(400).json({ message: 'Incorrect OTP',status:'success' });
                     }
 
-                    let newBalance = 0;
-                    if(transactionInfo.type == "withdrawal"){
-                        let withdrawlAmount = transactionInfo.amount;
-                        if(transactionInfo.balance < withdrawlAmount){
-                            return res.status(200).json({status:'success',message:'Insufficient balance'})
-                        }else{
-                            newBalance = transactionInfo.balance - withdrawlAmount;
-                        }
-                    }else{
-                        newBalance = transactionInfo.balance + transactionInfo.amount
-                    }
+                    const updateQuery = `
+                    UPDATE transactions 
+                    SET is_verified = 1, otp_code = NULL, otp_expires = NULL, status = "approved"   
+                    WHERE id = ?
+                    `;
 
-                    const queries = [
-                        { query: `UPDATE user SET balance = ? WHERE id = ?`, data: [newBalance, transactionInfo.id] },
-                        { query: `UPDATE transactions SET status = 'approved', otp_code = NULL, otp_expires = NULL WHERE id = ?`, data: [transId] }
-                    ]
+                    db.passData(updateQuery,[transId],function(obj){
+                        if(obj.status == "error")  {
+                            console.log(obj);
+                            
+                            return res.status(500).json({ status: "error", message: "Internal server error" });
+                        } 
+                        return res.status(200).json({message:"OTP is verified",status:"success"})
+                    })
 
-                    db.runTransaction(queries,function(obj){
-                        if(obj.status == "error") return res.status(500).json({ status: "error", message: "Internal server error" });
-                        else return res.json({ message: "Transaction approved successfully" ,status:"success"});
-                    });
+                    // let newBalance = 0;
+                    // if(transactionInfo.type == "withdrawal"){
+                    //     let withdrawlAmount = transactionInfo.amount;
+                    //     if(transactionInfo.balance < withdrawlAmount){
+                    //         return res.status(200).json({status:'success',message:'Insufficient balance'})
+                    //     }else{
+                    //         newBalance = transactionInfo.balance - withdrawlAmount;
+                    //     }
+                    // }else{
+                    //     newBalance = transactionInfo.balance + transactionInfo.amount
+                    // }
+
+                    // const queries = [
+                    //     { query: `UPDATE user SET balance = ? WHERE id = ?`, data: [newBalance, transactionInfo.id] },
+                    //     { query: `UPDATE transactions SET status = 'approved', otp_code = NULL, otp_expires = NULL WHERE id = ?`, data: [transId] }
+                    // ]
+
+                    // db.runTransaction(queries,function(obj){
+                    //     if(obj.status == "error") return res.status(500).json({ status: "error", message: "Internal server error" });
+                    //     else return res.json({ message: "Transaction approved successfully" ,status:"success"});
+                    // });
                     
                 }
             })
