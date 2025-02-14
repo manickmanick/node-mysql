@@ -8,26 +8,49 @@ module.exports = {
 
     transactionRequest:async(req,res)=>{
         try {
-            const { amount, type } = req.body; 
+            const { amount, type ,asset} = req.body; 
 
             const v = new Validator(req.body, {
                 type: 'required|in:deposit,withdrawal',
-                amount: 'required|decimal|min:1.0'
+                amount: 'required|decimal|min:1.0',
+                asset:'required'
             });
         
             const matched = await v.check();
             if (!matched) {
                 return res.status(400).json({ message: 'Validation failed', errors: v.errors ,status:'error'});
             }
-    
+            
             const userId = req.user.id;
+
+            if(type == "withdrawal"){
+
+                let userQuery = 'SELECT * FROM wallet WHERE user_id = ?'
+                db.passData(userQuery,[userId],function(obj){
+                    if(obj.status == "error"){
+                        return res.status(500).json({message:'internal server error',status:'error'})
+                    }
+                    else{
+                        let userInfo = obj.result[0];
+                        let assets = JSON.parse(userInfo.info)[asset]
+                        console.log(assets);
+                        if(assets == undefined || assets == null){
+                            return res.json({status:0,message:'Invalid asset'})
+                        } 
+                        if(assets < amount)  return res.json({status:0,message:'Insufficient balance'})
+                       
+                    }
+                });
+
+            }
+
     
             const otp = crypto.randomInt(100000, 999999).toString();
             const otpExpires = moment().add(5, 'minutes').format('YYYY-MM-DD HH:mm:ss');
     
-            const query = `INSERT INTO transactions (user_id, amount, type, otp_code, otp_expires, status) VALUES (?, ?, ?, ?, ?, 'pending')`;
+            const query = `INSERT INTO transactions (user_id, amount, type, otp_code, otp_expires, status,asset) VALUES (?, ?, ?, ?, ?, 'pending',?)`;
     
-            db.passData(query,[userId,amount,type,otp,otpExpires],function(obj){
+            db.passData(query,[userId,amount,type,otp,otpExpires,asset],function(obj){
                 if(obj.status == "error") return res.status(500).json({message:'internal server error',status:'error'})
                 else{
                    let mailContent = {
@@ -69,7 +92,7 @@ module.exports = {
                 return res.status(400).json({ message: 'Validation failed', errors: v.errors ,status:'error'});
             }
             const query = `
-                SELECT t.id, t.amount, t.type, t.otp_code, t.otp_expires, u.balance,u.id
+                SELECT t.id, t.amount, t.type, t.otp_code, t.otp_expires,u.id
                 FROM transactions t
                 INNER JOIN user u ON t.user_id = u.id
                 WHERE t.id = ? 
